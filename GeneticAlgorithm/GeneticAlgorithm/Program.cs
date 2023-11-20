@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 
 namespace GeneticScheduler
@@ -10,6 +11,7 @@ namespace GeneticScheduler
         public string Teacher { get; set; }
         public string Group { get; set; }
         public int Time { get; set; }
+        public string Audience { get; set; }
     }
 
     public class GeneticScheduler
@@ -17,15 +19,21 @@ namespace GeneticScheduler
         private readonly List<string> _subjects;
         private readonly List<string> _teachers;
         private readonly List<string> _groups;
+        private readonly List<string> _audiences;
         private readonly int _classesPerDay;
+        private readonly Dictionary<string, List<string>> _teacherSubjects;
         private static readonly Random Random = new Random();
 
-        public GeneticScheduler(List<string> subjects, List<string> teachers, List<string> groups, int classesPerDay)
+
+
+        public GeneticScheduler(List<string> subjects, List<string> teachers, List<string> groups, int classesPerDay, Dictionary<string, List<string>> teacherSubjects, List<string> audiences)
         {
             _subjects = subjects;
             _teachers = teachers;
             _groups = groups;
             _classesPerDay = classesPerDay;
+            _teacherSubjects = teacherSubjects;
+            _audiences = audiences;
         }
 
         private List<Class> GenerateRandomSchedule()
@@ -35,7 +43,8 @@ namespace GeneticScheduler
                 Subject = subject,
                 Teacher = _teachers[Random.Next(_teachers.Count)],
                 Group = _groups[Random.Next(_groups.Count)],
-                Time = Random.Next(1, _classesPerDay + 1)
+                Time = Random.Next(1, _classesPerDay + 1),
+                Audience = _audiences[Random.Next(_audiences.Count)]
             }).ToList();
         }
 
@@ -44,10 +53,16 @@ namespace GeneticScheduler
             return Enumerable.Range(0, populationSize).Select(_ => GenerateRandomSchedule()).ToList();
         }
 
-        private static double CalculateFitness(List<Class> schedule)
+        private static double CalculateFitness(List<Class> schedule, Dictionary<string, List<string>> teacherSubjects)
         {
-            int conflicts = schedule.SelectMany((c, i) => schedule.Skip(i + 1), (c1, c2) => new { c1, c2 })
-                .Count(pair => pair.c1.Time == pair.c2.Time || pair.c1.Teacher == pair.c2.Teacher || pair.c1.Group == pair.c2.Group);
+            int conflicts = schedule
+                .SelectMany((c, i) => schedule.Skip(i + 1), (c1, c2) => new { c1, c2 })
+                .Count(pair => pair.c1.Time == pair.c2.Time && pair.c1.Group == pair.c2.Group ||
+                               pair.c1.Teacher == pair.c2.Teacher && pair.c1.Time == pair.c2.Time ||
+                               pair.c1.Time == pair.c2.Time && pair.c1.Audience == pair.c2.Audience);
+
+            // Додавання конфліктів, якщо викладач читає невідповідний предмет
+            conflicts += schedule.Count(c => !teacherSubjects[c.Teacher].Contains(c.Subject));
 
             Console.WriteLine($"Conflicts: {conflicts}, rating: {1.0 / (1.0 + conflicts)}");
             return 1.0 / (1.0 + conflicts);
@@ -61,18 +76,11 @@ namespace GeneticScheduler
                     Subject = c.Subject,
                     Teacher = _teachers[Random.Next(_teachers.Count)],
                     Group = _groups[Random.Next(_groups.Count)],
-                    Time = Random.Next(1, _classesPerDay + 1)
+                    Time = Random.Next(1, _classesPerDay + 1),
+                    Audience = _audiences[Random.Next(_audiences.Count)],
                 }
                 : c).ToList();
         }
-
-        //private (List<Class>, List<Class>) Crossover(List<Class> schedule1, List<Class> schedule2)
-        //{
-        //    int crossoverPoint = Random.Next(1, _subjects.Count);
-        //    var child1 = schedule1.Take(crossoverPoint).Concat(schedule2.Skip(crossoverPoint)).ToList();
-        //    var child2 = schedule2.Take(crossoverPoint).Concat(schedule1.Skip(crossoverPoint)).ToList();
-        //    return (child1, child2);
-        //}
         
         private (List<Class>, List<Class>) Crossover(List<Class> schedule1, List<Class> schedule2)
         {
@@ -108,7 +116,8 @@ namespace GeneticScheduler
 
             for (int generation = 0; generation < generations; generation++)
             {
-                var fitnessScores = population.Select(CalculateFitness).ToList();
+                var fitnessScores = population.Select(schedule => CalculateFitness(schedule, _teacherSubjects)).ToList();
+
                 int bestIndex = fitnessScores.IndexOf(fitnessScores.Max());
                 bestFitnessScore = fitnessScores[bestIndex];
                 bestSchedule = population[bestIndex];
@@ -141,15 +150,27 @@ namespace GeneticScheduler
             var subjects = new List<string> { "Математичний аналiз", "Програмування", "Ядерна фiзика", "Алгебра та геометрiя", "Механiка", "Управлiння проектами" };
             var teachers = new List<string> { "Миколенко", "Зiнченко", "Мудрик", "Забарний", "Довбик", "Циганков" };
             var groups = new List<string> { "МАТ-21", "ФIЗ-32", "МАТ-22", "ФIЗ-31", "ПРОГ-41", "ПРОГ-42" };
+            var teacherSubjects = new Dictionary<string, List<string>>
+            {
+                { "Миколенко", new List<string> { "Математичний аналiз", "Алгебра та геометрiя" } },
+                { "Зiнченко", new List<string> { "Програмування", "Управлiння проектами" } },
+                { "Мудрик", new List<string> { "Ядерна фiзика" } },
+                { "Забарний", new List<string> { "Механiка" } },
+                { "Довбик", new List<string> { "Програмування" } },
+                { "Циганков", new List<string> { "Управлiння проектами", "Алгебра та геометрiя" } }
+            };
+
+            var audiences = new List<string> { "01", "02", "03", "04", "05", "06" };
+
             int classesPerDay = 5;
 
-            var scheduler = new GeneticScheduler(subjects, teachers, groups, classesPerDay);
-            var (bestSchedule, fitness) = scheduler.Solve(50, 10);
+            var scheduler = new GeneticScheduler(subjects, teachers, groups, classesPerDay, teacherSubjects, audiences);
+            var (bestSchedule, fitness) = scheduler.Solve(500, 10);
 
             Console.WriteLine("Best schedule:");
             foreach (var lesson in bestSchedule)
             {
-                Console.WriteLine($"{lesson.Subject} - {lesson.Teacher} - {lesson.Group} - {lesson.Time}");
+                Console.WriteLine($"{lesson.Subject} - {lesson.Teacher} - {lesson.Group} - {lesson.Time} - {lesson.Audience}");
             }
             Console.WriteLine($"Rating: {fitness}");
         }
