@@ -22,11 +22,12 @@ namespace GeneticScheduler
         private readonly List<string> _audiences;
         private readonly int _classesPerDay;
         private readonly Dictionary<string, List<string>> _teacherSubjects;
+        private readonly Dictionary<string, int> _teacherMaxHours;
         private static readonly Random Random = new Random();
 
 
 
-        public GeneticScheduler(List<string> subjects, List<string> teachers, List<string> groups, int classesPerDay, Dictionary<string, List<string>> teacherSubjects, List<string> audiences)
+        public GeneticScheduler(List<string> subjects, List<string> teachers, List<string> groups, int classesPerDay, Dictionary<string, List<string>> teacherSubjects, List<string> audiences, Dictionary<string, int> teacherMaxHours)
         {
             _subjects = subjects;
             _teachers = teachers;
@@ -34,6 +35,7 @@ namespace GeneticScheduler
             _classesPerDay = classesPerDay;
             _teacherSubjects = teacherSubjects;
             _audiences = audiences;
+            _teacherMaxHours = teacherMaxHours;
         }
 
         private List<Class> GenerateRandomSchedule()
@@ -53,7 +55,7 @@ namespace GeneticScheduler
             return Enumerable.Range(0, populationSize).Select(_ => GenerateRandomSchedule()).ToList();
         }
 
-        private static double CalculateFitness(List<Class> schedule, Dictionary<string, List<string>> teacherSubjects)
+        private static double CalculateFitness(List<Class> schedule, Dictionary<string, List<string>> teacherSubjects, Dictionary<string, int> teacherMaxHours)
         {
             int conflicts = schedule
                 .SelectMany((c, i) => schedule.Skip(i + 1), (c1, c2) => new { c1, c2 })
@@ -63,6 +65,17 @@ namespace GeneticScheduler
 
             // Додавання конфліктів, якщо викладач читає невідповідний предмет
             conflicts += schedule.Count(c => !teacherSubjects[c.Teacher].Contains(c.Subject));
+
+            // Перевірка кількості годин викладання на перевищення максимальної кількості для кожного викладача
+            var teachingHours = schedule.GroupBy(c => c.Teacher)
+                                       .ToDictionary(group => group.Key, group => group.Sum(c => c.Time));
+            foreach (var teacher in teachingHours)
+            {
+                if (teacherMaxHours.ContainsKey(teacher.Key) && teacher.Value > teacherMaxHours[teacher.Key])
+                {
+                    conflicts++; // Додаємо конфлікт, якщо викладач перевищує максимальну кількість годин
+                }
+            }
 
             Console.WriteLine($"Conflicts: {conflicts}, rating: {1.0 / (1.0 + conflicts)}");
             return 1.0 / (1.0 + conflicts);
@@ -116,7 +129,7 @@ namespace GeneticScheduler
 
             for (int generation = 0; generation < generations; generation++)
             {
-                var fitnessScores = population.Select(schedule => CalculateFitness(schedule, _teacherSubjects)).ToList();
+                var fitnessScores = population.Select(schedule => CalculateFitness(schedule, _teacherSubjects, _teacherMaxHours)).ToList();
 
                 int bestIndex = fitnessScores.IndexOf(fitnessScores.Max());
                 bestFitnessScore = fitnessScores[bestIndex];
@@ -160,12 +173,22 @@ namespace GeneticScheduler
                 { "Циганков", new List<string> { "Управлiння проектами", "Алгебра та геометрiя" } }
             };
 
+            var teacherMaxHours = new Dictionary<string, int>
+                {
+                    { "Миколенко", 2 },
+                    { "Зiнченко", 3 },
+                    { "Мудрик", 2 },
+                    { "Забарний", 1 },
+                    { "Довбик", 3 },
+                    { "Циганков", 2 }
+                };
+
             var audiences = new List<string> { "01", "02", "03", "04", "05", "06" };
 
             int classesPerDay = 5;
 
-            var scheduler = new GeneticScheduler(subjects, teachers, groups, classesPerDay, teacherSubjects, audiences);
-            var (bestSchedule, fitness) = scheduler.Solve(500, 10);
+            var scheduler = new GeneticScheduler(subjects, teachers, groups, classesPerDay, teacherSubjects, audiences, teacherMaxHours);
+            var (bestSchedule, fitness) = scheduler.Solve(1000, 100);
 
             Console.WriteLine("Best schedule:");
             foreach (var lesson in bestSchedule)
