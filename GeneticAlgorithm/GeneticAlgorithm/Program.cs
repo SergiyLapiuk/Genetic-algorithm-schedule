@@ -23,11 +23,12 @@ namespace GeneticScheduler
         private readonly int _classesPerDay;
         private readonly Dictionary<string, List<string>> _teacherSubjects;
         private readonly Dictionary<string, int> _teacherMaxHours;
+        private readonly Dictionary<string, List<string>> _groupsSubjects;
         private static readonly Random Random = new Random();
 
 
 
-        public GeneticScheduler(List<string> subjects, List<string> teachers, List<string> groups, int classesPerDay, Dictionary<string, List<string>> teacherSubjects, List<string> audiences, Dictionary<string, int> teacherMaxHours)
+        public GeneticScheduler(List<string> subjects, List<string> teachers, List<string> groups, int classesPerDay, Dictionary<string, List<string>> teacherSubjects, List<string> audiences, Dictionary<string, int> teacherMaxHours, Dictionary<string, List<string>> groupsSubjects)
         {
             _subjects = subjects;
             _teachers = teachers;
@@ -36,6 +37,7 @@ namespace GeneticScheduler
             _teacherSubjects = teacherSubjects;
             _audiences = audiences;
             _teacherMaxHours = teacherMaxHours;
+            _groupsSubjects = groupsSubjects;
         }
 
         private List<Class> GenerateRandomSchedule()
@@ -55,7 +57,7 @@ namespace GeneticScheduler
             return Enumerable.Range(0, populationSize).Select(_ => GenerateRandomSchedule()).ToList();
         }
 
-        private static double CalculateFitness(List<Class> schedule, Dictionary<string, List<string>> teacherSubjects, Dictionary<string, int> teacherMaxHours)
+        private static double CalculateFitness(List<Class> schedule, Dictionary<string, List<string>> teacherSubjects, Dictionary<string, int> teacherMaxHours, Dictionary<string, List<string>> groupsSubjects)
         {
             int conflicts = schedule
                 .SelectMany((c, i) => schedule.Skip(i + 1), (c1, c2) => new { c1, c2 })
@@ -65,6 +67,7 @@ namespace GeneticScheduler
 
             // Додавання конфліктів, якщо викладач читає невідповідний предмет
             conflicts += schedule.Count(c => !teacherSubjects[c.Teacher].Contains(c.Subject));
+            conflicts += schedule.Count(c => !groupsSubjects[c.Group].Contains(c.Subject));
 
             // Перевірка кількості годин викладання на перевищення максимальної кількості для кожного викладача
             var teachingHours = schedule.GroupBy(c => c.Teacher)
@@ -115,11 +118,40 @@ namespace GeneticScheduler
         }
 
 
-        private static List<Class> SelectBest(List<List<Class>> population, List<double> fitnessScores)
-        {
-            int bestIndex = fitnessScores.IndexOf(fitnessScores.Max());
-            return population[bestIndex];
-        }
+        //    public (List<Class>, double) Solve(int populationSize, int generations)
+        //    {
+        //        var population = GenerateRandomPopulation(populationSize);
+        //        double bestFitnessScore = 0;
+        //        List<Class> bestSchedule = null;
+
+        //        for (int generation = 0; generation < generations; generation++)
+        //        {
+        //            var fitnessScores = population.Select(schedule => CalculateFitness(schedule, _teacherSubjects, _teacherMaxHours, _groupsSubjects)).ToList();
+
+        //            int bestIndex = fitnessScores.IndexOf(fitnessScores.Max());
+        //            bestFitnessScore = fitnessScores[bestIndex];
+        //            bestSchedule = population[bestIndex];
+
+        //            Console.WriteLine($"Generation {generation + 1}: Best rating = {bestFitnessScore}");
+        //            Console.WriteLine();
+
+
+        //            var newPopulation = new List<List<Class>>();
+        //            while (newPopulation.Count < populationSize)
+        //            {
+        //                var parent1 = population[Random.Next(population.Count)];
+        //                var parent2 = population[Random.Next(population.Count)];
+        //                var (child1, child2) = Crossover(parent1, parent2);
+        //                newPopulation.Add(Mutate(child1));
+        //                newPopulation.Add(Mutate(child2));
+        //            }
+
+        //            population = newPopulation.Take(populationSize).ToList();
+        //        }
+
+        //        return (bestSchedule, bestFitnessScore);
+        //    }
+        //}
 
         public (List<Class>, double) Solve(int populationSize, int generations)
         {
@@ -127,26 +159,47 @@ namespace GeneticScheduler
             double bestFitnessScore = 0;
             List<Class> bestSchedule = null;
 
+            // Визначення ймовірностей
+            double crossoverProbability = 0.8; // Ймовірність кросоверу 80%
+            double mutationProbability = 0.1; // Ймовірність мутації гену 10%
+            double mutationGeneralProbability = 0.8; // Ймовірність мутації гену 10%
+
+
             for (int generation = 0; generation < generations; generation++)
             {
-                var fitnessScores = population.Select(schedule => CalculateFitness(schedule, _teacherSubjects, _teacherMaxHours)).ToList();
-
-                int bestIndex = fitnessScores.IndexOf(fitnessScores.Max());
-                bestFitnessScore = fitnessScores[bestIndex];
-                bestSchedule = population[bestIndex];
-
-                Console.WriteLine($"Generation {generation + 1}: Best rating = {bestFitnessScore}");
-                Console.WriteLine();
-
+                // Існуючий код для оцінки показників фітнесу...
 
                 var newPopulation = new List<List<Class>>();
                 while (newPopulation.Count < populationSize)
                 {
                     var parent1 = population[Random.Next(population.Count)];
                     var parent2 = population[Random.Next(population.Count)];
-                    var (child1, child2) = Crossover(parent1, parent2);
-                    newPopulation.Add(Mutate(child1));
-                    newPopulation.Add(Mutate(child2));
+
+                    // Застосування кросоверу на основі ймовірності
+                    if (Random.NextDouble() < crossoverProbability)
+                    {
+                        var (child1, child2) = Crossover(parent1, parent2);
+                        newPopulation.Add(child1);
+                        newPopulation.Add(child2);
+                    }
+                    else
+                    {
+                        // Якщо кросовер не відбувається, батьків додаємо безпосередньо
+                        newPopulation.Add(parent1);
+                        newPopulation.Add(parent2);
+                    }
+
+                    if (Random.NextDouble() < mutationGeneralProbability) 
+                    {
+                        // Застосування мутації на основі ймовірності
+                        for (int i = newPopulation.Count - 2; i < newPopulation.Count; i++)
+                        {
+                            if (Random.NextDouble() < mutationProbability)
+                            {
+                                newPopulation[i] = Mutate(newPopulation[i]);
+                            }
+                        } 
+                    }
                 }
 
                 population = newPopulation.Take(populationSize).ToList();
@@ -154,9 +207,9 @@ namespace GeneticScheduler
 
             return (bestSchedule, bestFitnessScore);
         }
-    }
 
-    class Program
+
+        class Program
     {
         static void Main(string[] args)
         {
@@ -173,22 +226,32 @@ namespace GeneticScheduler
                 { "Циганков", new List<string> { "Управлiння проектами", "Алгебра та геометрiя" } }
             };
 
+            var groupsSubjects = new Dictionary<string, List<string>>
+            {
+                { "МАТ-21", new List<string> { "Математичний аналiз", "Алгебра та геометрiя" } },
+                { "МАТ-22", new List<string> { "Математичний аналiз", "Алгебра та геометрiя" } },
+                { "ПРОГ-41", new List<string> { "Програмування", "Управлiння проектами" } },
+                { "ФIЗ-31", new List<string> { "Ядерна фiзика" } },
+                { "ФIЗ-32", new List<string> { "Механiка" } },
+                { "ПРОГ-42", new List<string> { "Програмування" } }
+            };
+
             var teacherMaxHours = new Dictionary<string, int>
                 {
-                    { "Миколенко", 2 },
-                    { "Зiнченко", 3 },
-                    { "Мудрик", 2 },
-                    { "Забарний", 1 },
-                    { "Довбик", 3 },
-                    { "Циганков", 2 }
+                    { "Миколенко", 20 },
+                    { "Зiнченко", 30 },
+                    { "Мудрик", 20 },
+                    { "Забарний", 10 },
+                    { "Довбик", 30 },
+                    { "Циганков", 20 }
                 };
 
             var audiences = new List<string> { "01", "02", "03", "04", "05", "06" };
 
             int classesPerDay = 5;
 
-            var scheduler = new GeneticScheduler(subjects, teachers, groups, classesPerDay, teacherSubjects, audiences, teacherMaxHours);
-            var (bestSchedule, fitness) = scheduler.Solve(1000, 100);
+            var scheduler = new GeneticScheduler(subjects, teachers, groups, classesPerDay, teacherSubjects, audiences, teacherMaxHours, groupsSubjects);
+            var (bestSchedule, fitness) = scheduler.Solve(500, 50);
 
             Console.WriteLine("Best schedule:");
             foreach (var lesson in bestSchedule)
