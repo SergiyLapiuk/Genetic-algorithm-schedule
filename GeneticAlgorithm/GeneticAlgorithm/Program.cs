@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -97,7 +97,7 @@ namespace GeneticScheduler
                 }
                 : c).ToList();
         }
-        
+
         private (List<Class>, List<Class>) Crossover(List<Class> schedule1, List<Class> schedule2)
         {
             // Визначення двох випадкових точок для кросоверу
@@ -167,7 +167,14 @@ namespace GeneticScheduler
 
             for (int generation = 0; generation < generations; generation++)
             {
-                // Існуючий код для оцінки показників фітнесу...
+                var fitnessScores = population.Select(schedule => CalculateFitness(schedule, _teacherSubjects, _teacherMaxHours, _groupsSubjects)).ToList();
+
+                int bestIndex = fitnessScores.IndexOf(fitnessScores.Max());
+                bestFitnessScore = fitnessScores[bestIndex];
+                bestSchedule = population[bestIndex];
+
+                Console.WriteLine($"Generation {generation + 1}: Best rating = {bestFitnessScore}");
+                Console.WriteLine();
 
                 var newPopulation = new List<List<Class>>();
                 while (newPopulation.Count < populationSize)
@@ -189,7 +196,7 @@ namespace GeneticScheduler
                         newPopulation.Add(parent2);
                     }
 
-                    if (Random.NextDouble() < mutationGeneralProbability) 
+                    if (Random.NextDouble() < mutationGeneralProbability)
                     {
                         // Застосування мутації на основі ймовірності
                         for (int i = newPopulation.Count - 2; i < newPopulation.Count; i++)
@@ -198,7 +205,7 @@ namespace GeneticScheduler
                             {
                                 newPopulation[i] = Mutate(newPopulation[i]);
                             }
-                        } 
+                        }
                     }
                 }
 
@@ -210,13 +217,13 @@ namespace GeneticScheduler
 
 
         class Program
-    {
-        static void Main(string[] args)
         {
-            var subjects = new List<string> { "Математичний аналiз", "Програмування", "Ядерна фiзика", "Алгебра та геометрiя", "Механiка", "Управлiння проектами" };
-            var teachers = new List<string> { "Миколенко", "Зiнченко", "Мудрик", "Забарний", "Довбик", "Циганков" };
-            var groups = new List<string> { "МАТ-21", "ФIЗ-32", "МАТ-22", "ФIЗ-31", "ПРОГ-41", "ПРОГ-42" };
-            var teacherSubjects = new Dictionary<string, List<string>>
+            static void Main(string[] args)
+            {
+                var subjects = new List<string> { "Математичний аналiз", "Програмування", "Ядерна фiзика", "Алгебра та геометрiя", "Механiка", "Управлiння проектами" };
+                var teachers = new List<string> { "Миколенко", "Зiнченко", "Мудрик", "Забарний", "Довбик", "Циганков" };
+                var groups = new List<string> { "МАТ-21", "ФIЗ-32", "МАТ-22", "ФIЗ-31", "ПРОГ-41", "ПРОГ-42" };
+                var teacherSubjects = new Dictionary<string, List<string>>
             {
                 { "Миколенко", new List<string> { "Математичний аналiз", "Алгебра та геометрiя" } },
                 { "Зiнченко", new List<string> { "Програмування", "Управлiння проектами" } },
@@ -226,7 +233,7 @@ namespace GeneticScheduler
                 { "Циганков", new List<string> { "Управлiння проектами", "Алгебра та геометрiя" } }
             };
 
-            var groupsSubjects = new Dictionary<string, List<string>>
+                var groupsSubjects = new Dictionary<string, List<string>>
             {
                 { "МАТ-21", new List<string> { "Математичний аналiз", "Алгебра та геометрiя" } },
                 { "МАТ-22", new List<string> { "Математичний аналiз", "Алгебра та геометрiя" } },
@@ -236,7 +243,7 @@ namespace GeneticScheduler
                 { "ПРОГ-42", new List<string> { "Програмування" } }
             };
 
-            var teacherMaxHours = new Dictionary<string, int>
+                var teacherMaxHours = new Dictionary<string, int>
                 {
                     { "Миколенко", 20 },
                     { "Зiнченко", 30 },
@@ -246,19 +253,20 @@ namespace GeneticScheduler
                     { "Циганков", 20 }
                 };
 
-            var audiences = new List<string> { "01", "02", "03", "04", "05", "06" };
+                var audiences = new List<string> { "01", "02", "03", "04", "05", "06" };
 
-            int classesPerDay = 5;
+                int classesPerDay = 5;
 
-            var scheduler = new GeneticScheduler(subjects, teachers, groups, classesPerDay, teacherSubjects, audiences, teacherMaxHours, groupsSubjects);
-            var (bestSchedule, fitness) = scheduler.Solve(500, 50);
+                var scheduler = new GeneticScheduler(subjects, teachers, groups, classesPerDay, teacherSubjects, audiences, teacherMaxHours, groupsSubjects);
+                var (bestSchedule, fitness) = scheduler.Solve(500, 100);
 
-            Console.WriteLine("Best schedule:");
-            foreach (var lesson in bestSchedule)
-            {
-                Console.WriteLine($"{lesson.Subject} - {lesson.Teacher} - {lesson.Group} - {lesson.Time} - {lesson.Audience}");
+                Console.WriteLine("Best schedule:");
+                foreach (var lesson in bestSchedule)
+                {
+                    Console.WriteLine($"{lesson.Subject} - {lesson.Teacher} - {lesson.Group} - {lesson.Time} - {lesson.Audience}");
+                }
+                Console.WriteLine($"Rating: {fitness}");
             }
-            Console.WriteLine($"Rating: {fitness}");
         }
     }
 }
